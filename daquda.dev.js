@@ -7,17 +7,18 @@ var daquda = (function(proto) {
       if (!data[i]) data[i] = [];
     }
   }
-  construct['prototype'] = proto;
-  return function(fields, data) {
+  function facade(fields, data) {
     return new construct(fields, data);
   }
+  facade['prototype'] = construct['prototype'] = proto;
+  return facade;
 })({
   //public interface
   'create': function(record) {
     return this['crud'](record);
   },
-  'read': function(record) {
-    return this['crud'](record, 1);
+  'read': function(keyOrRecord) {
+    return this['crud']([].concat(keyOrRecord), 1);
   },
   'update': function(record) {
     return this['crud'](record, 2);
@@ -31,42 +32,36 @@ var daquda = (function(proto) {
     //type = create: 0, read: 1, update: 2, delete: 3
     var data = data || [],
       columns = this['data'],
-      key, keycol = columns[0],
+      temp,
       index = -1,
-      i, len = keycol.length;
+      i;
     if (type && data[0]) {
-      key = data[0];
-      for (i = 0; i < len; i++) {
-        if (keycol[i] == key) {
-          index = i;
-          break;
-        }
-      }
+      index = this['findKey'](data[0]);
     }
     if (!type) {
-      index = len;
+      index = columns[0].length;
       data[0] = this['newKey']();
     }
     if (index > -1) {
       i = 0;
-      len = columns.length;
+      temp = columns.length;
       if (type == 3) { //delete
-        for (; i < len; i++) {
+        for (; i < temp; i++) {
           data[i] = columns[i].splice(index, 1)[0];
         }
       } else if (type == 1) { //read
-        for (; i < len; i++) {
+        for (; i < temp; i++) {
           data[i] = columns[i][index];
         }
       } else { //create or update
-        for (; i < len; i++) {
+        for (; i < temp; i++) {
           columns[i][index] = data[i];
         }
       }
       if (type ^ 1) { //if not read, notify listeners about change
         type = type ^ 3 ? type ^ 2 ? 'create' : 'update' : 'delete';
-        for (key in (i = this['listeners'])) {
-          i[key] && i[key](type, index, data);
+        for (temp in (i = this['listeners'])) {
+          i[temp] && i[temp](type, index, data);
         }
       }
       return data;
@@ -82,8 +77,15 @@ var daquda = (function(proto) {
       return id;
     }
   },
+  'findKey': function(key){
+    var keycol = this['data'][0], l = keycol.length, i;
+    for(i = 0; i < l; i++){
+      if(key == keycol[i]) return i;
+    }
+    return -1;
+  },
   'newKey': function() {
     var col = this['data'][0];
     return (col[col.length - 1] || 0) + 1;
   }
-})
+});
